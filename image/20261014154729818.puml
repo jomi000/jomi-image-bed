@@ -1,0 +1,87 @@
+@startuml
+' 同一业务模型的UML编辑表达；尚未在本机PlantUML渲染。
+' 依据：SCI需求图3-5、4.1、4.2、8.1；第二轮反馈；DFD v0.3；D06/D07。
+title SCI任务同步与校验 - 熊佳敏 v0.2
+hide footbox
+skinparam defaultFontName Microsoft YaHei
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 25
+skinparam NoteBackgroundColor #FFF7ED
+skinparam NoteBorderColor #D97706
+collections "S01 本地资料" as S01
+participant "App取码职责" as App
+actor "使用者\n（两端可由不同人员完成）" as User
+participant "Web同步职责" as Web
+participant "E04机载/中转暂存\n（来源、归属、路径待核对）" as E04
+participant "Web内部校验\n（本端逻辑职责）" as Check
+collections "S02 接入资料" as S02
+note over App,Check
+App与Web为SCI应用侧职责；内部校验不确定独立服务或部署。
+S01/S02为逻辑资料；E04沿用既有来源占位。
+end note
+
+group App准备与人工录入 - UC-P0-07 / D06
+User -> App : 选择任务 / 取码请求（F08）
+activate App
+App -> S01 : 请求读取所选任务已有成果
+S01 --> App : 任务关联与成果文件（F19）
+App -> App : 准备文件清单并计算MD5\n准备任务码与7天期限关联
+note right of App
+正式码规则：SCI-Q16；期限细则：SCI-Q06。
+附件必需性及缺件是否能取码：SCI-Q18。
+end note
+App -> S01 : 保存码、期限、任务与摘要关联（F20）
+App --> User : 同步码、7天提示及摘要关联（F09）
+deactivate App
+User -> Web : 复制/提供后人工录入码并请求同步（F10）
+end
+
+group 检查、取包、校验与反馈 - UC-P0-08 / D07
+activate Web
+Web -> Web : 容错清洗 / 格式检查
+alt 格式错误
+  Web --> User : 提示格式错误，修改后再尝试（F11）
+else 格式可接受
+  Web -> Web : 核对任务关联与有效期
+  note right of Web
+  检查是业务门槛，不表示码已编码期限。
+  信息获取位置及边界待定：SCI-Q05/Q06。
+  end note
+  alt 无效或过期
+    Web --> User : 拒绝本次同步，提示无效或过期（F11）
+  else 任务有效且未过期
+    Web -> E04 : 凭码请求对应任务成果包（F12）
+    E04 --> Web : 成果包、文件及App MD5清单（F13）
+    note over Web,E04
+    码/任务/包/清单对应及办公区路径待核对：SCI-Q05。
+    end note
+    Web -> Check : 核验任务、成果包与文件清单
+    activate Check
+    Check -> Check : 按清单检查缺失\n逐文件计算MD5并与App摘要比对
+    Check --> Web : 缺失项与逐文件MD5比对结果
+    deactivate Check
+    alt 缺失附件（可能同时有摘要不一致）
+      Web --> User : 缺失清单及重生成码补传指引（F11）
+      note over User,App
+      缺件提示已有需求；重生成/补齐原型闭环未实现。
+      入口、操作者、旧码及完成状态待定：SCI-Q17/Q06。
+      end note
+    else 文件齐全但MD5不一致
+      Web --> User : 返回完整校验未通过的结果（F11）
+      note right of Web
+      提示、恢复及异常留存待定：SCI-Q05/Q17/Q18。
+      end note
+    else 文件齐全且全部MD5一致
+      Web -> S02 : 保存成果、附件与校验记录（F21）
+      S02 --> Web : 正常场景的逻辑留存结果
+      Web --> User : 结果、来源设备、时间及大小（F11）
+    end
+  end
+end
+deactivate Web
+end
+note over Web,S02
+异常留存及可查询性待定：SCI-Q18/Q02；权限沿SCI-Q09。
+正常资料后续由4.0按F22读取，本图不展开检索或下载。
+end note
+@enduml

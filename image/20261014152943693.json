@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "SCI 任务同步与校验时序图 · 熊佳敏 v0.2",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1300,
+      745
+    ],
+    "legend": {
+      "title": "方括号表示条件：只执行命中响应",
+      "mode": "auto"
+    }
+  },
+  "participants": [
+    {
+      "id": "local",
+      "type": "database",
+      "label": "S01 本地资料"
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "App 取码职责"
+    },
+    {
+      "id": "user",
+      "type": "external",
+      "label": "使用者"
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "Web 同步职责"
+    },
+    {
+      "id": "source",
+      "type": "external",
+      "label": "E04 来源待核对"
+    },
+    {
+      "id": "verify",
+      "type": "backend",
+      "label": "Web 内部校验"
+    },
+    {
+      "id": "archive",
+      "type": "database",
+      "label": "S02 接入资料"
+    }
+  ],
+  "segments": [
+    {
+      "from": 149,
+      "to": 333,
+      "label": "① App 准备与人工录入"
+    },
+    {
+      "from": 338,
+      "to": 397,
+      "label": "② 码与期限检查；正式码规则待定"
+    },
+    {
+      "from": 402,
+      "to": 675,
+      "label": "③ 取包、逐文件核验与结果分支"
+    }
+  ],
+  "messages": [
+    {
+      "id": "sync-01",
+      "from": "user",
+      "to": "app",
+      "y": 170,
+      "label": "选择任务／取码请求 F08",
+      "variant": "default"
+    },
+    {
+      "id": "sync-02",
+      "from": "app",
+      "to": "local",
+      "y": 200,
+      "label": "请求读取所选任务成果",
+      "variant": "default"
+    },
+    {
+      "id": "sync-03",
+      "from": "local",
+      "to": "app",
+      "y": 230,
+      "label": "任务关联与成果文件 F19",
+      "variant": "return"
+    },
+    {
+      "id": "sync-04",
+      "from": "app",
+      "to": "local",
+      "y": 260,
+      "label": "准备清单／MD5；保存码与期限 F20",
+      "variant": "default"
+    },
+    {
+      "id": "sync-05",
+      "from": "app",
+      "to": "user",
+      "y": 290,
+      "label": "任务码／7 天／摘要关联 F09",
+      "variant": "return"
+    },
+    {
+      "id": "sync-06",
+      "from": "user",
+      "to": "web",
+      "y": 320,
+      "label": "人工录入码／同步请求 F10",
+      "variant": "default"
+    },
+    {
+      "id": "sync-07",
+      "from": "web",
+      "to": "user",
+      "y": 350,
+      "label": "[格式错误] 提示修改后重试",
+      "variant": "return"
+    },
+    {
+      "id": "sync-08",
+      "from": "web",
+      "to": "user",
+      "y": 380,
+      "label": "[无效或过期] 拒绝；期限细则待定",
+      "variant": "return"
+    },
+    {
+      "id": "sync-09",
+      "from": "web",
+      "to": "source",
+      "y": 410,
+      "label": "[码通过] 凭码取包 F12",
+      "variant": "default"
+    },
+    {
+      "id": "sync-10",
+      "from": "source",
+      "to": "web",
+      "y": 440,
+      "label": "成果包／文件与 MD5 清单 F13",
+      "variant": "return"
+    },
+    {
+      "id": "check-files",
+      "from": "web",
+      "to": "verify",
+      "label": "逐文件核验（任务／包／清单）",
+      "variant": "default",
+      "y": 470
+    },
+    {
+      "id": "check-result",
+      "from": "verify",
+      "to": "web",
+      "label": "缺失项／MD5 比对结果",
+      "variant": "return",
+      "y": 500
+    },
+    {
+      "id": "sync-11",
+      "from": "web",
+      "to": "user",
+      "y": 530,
+      "label": "[缺附件] 缺失清单／重生成指引；闭环待定",
+      "variant": "return"
+    },
+    {
+      "id": "sync-12",
+      "from": "web",
+      "to": "user",
+      "y": 560,
+      "label": "[MD5不一致] 未通过；恢复待定",
+      "variant": "return"
+    },
+    {
+      "id": "sync-13",
+      "from": "web",
+      "to": "archive",
+      "y": 590,
+      "label": "[齐全且一致] 保存成果／记录 F21",
+      "variant": "default"
+    },
+    {
+      "id": "sync-14",
+      "from": "archive",
+      "to": "web",
+      "y": 620,
+      "label": "正常场景：资料已留存",
+      "variant": "return"
+    },
+    {
+      "id": "sync-15",
+      "from": "web",
+      "to": "user",
+      "y": 650,
+      "label": "[留存完成] 结果／来源／时间／大小 F11",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "app",
+      "from": 170,
+      "to": 295,
+      "type": "frontend"
+    },
+    {
+      "participant": "web",
+      "from": 320,
+      "to": 655,
+      "type": "frontend"
+    },
+    {
+      "participant": "verify",
+      "from": 470,
+      "to": 505,
+      "type": "backend"
+    }
+  ]
+}

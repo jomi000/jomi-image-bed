@@ -1,0 +1,145 @@
+@startuml
+title SQ-01 SCI端到端核心时序图｜第四轮评审候选稿
+hide footbox
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam sequenceMessageAlign center
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam maxMessageSize 260
+skinparam sequence {
+ ArrowColor #375676
+ LifeLineBorderColor #94A3B8
+ ParticipantBackgroundColor #EFF6FF
+ ParticipantBorderColor #2563EB
+ ActorBorderColor #475569
+ GroupBorderColor #64748B
+ GroupBackgroundColor #F8FAFC
+ GroupHeaderFontColor #0F172A
+}
+skinparam NoteBackgroundColor #FFF7ED
+skinparam NoteBorderColor #D97706
+
+actor "使用者\n（App／Web可由不同人员操作）" as User
+participant "Android App" as App
+participant "外部机载系统\n（含现有机载处理方向）" as UAV
+collections "S01 App本地巡检资料\n（逻辑资料）" as S01
+participant "E04 成果来源占位\n（实际节点／路径待核对）" as E04
+participant "Web数据中心逻辑职责\n（含同步、校验与查询）" as Web
+collections "S02 Web已接入任务资料\n（逻辑资料及附件）" as S02
+
+note over User,S02
+范围：单任务核心交互＋用户另行发起的查询／下载；不是完整API或部署方案。
+各端按身份与数据范围授权；公共能力提供方和部署未定。
+机载与E04可能由同一实际节点承担，E04不代表新增独立服务。
+end note
+
+ref over User,App,UAV,S01
+SQ-02 App—机载巡检交互详图（D01～D03）
+入口：用户准备设备、场景／航线并发起巡检
+出口：已确认完成／中断及采集资料关联；或未启动／仍待确认
+end ref
+
+note over App,UAV
+巡检结束≠成果就绪；中断后已有数据仍需处理，不保证完整成果。
+下段按需求机载处理方向表达；部分处理位置可调整，封装及接入路径待确认。
+end note
+
+alt 已确认完成／中断，且存在可处理的采集资料
+ group 成果处理与App接入（D04／D05；UC-12／13）
+  loop 收到实际处理反馈时展示；重处理须用户选择且有新反馈，成功或放弃后退出
+   UAV ->> App : 处理状态〔任务、阶段、进度、耗时〕\n阶段：数据回传／点云处理／结果计算
+   App --> User : 展示处理状态；处理完成前禁用查看结果
+   alt 本次处理失败
+    UAV ->> App : 失败反馈〔任务、原因、已采集数据关联〕
+    App --> User : 提示失败；提供重新处理／放弃本次结果
+    opt 用户作出处置选择（否则保持失败待处理）
+     User -> App : 处置选择〔当前任务、重新处理／放弃〕（F64）
+     alt 用户选择重新处理，且满足权限与执行条件
+      App ->> UAV : 重处理请求〔当前任务、重处理意向〕（F65）
+      note over App,UAV : 请求不等于受理或成功；独立受理响应、重复请求及具体节点待确认。
+     else 用户选择放弃本次结果
+      App -> App : 记录任务及放弃选择；更新本次应用侧处理状态
+      App --> User : 本次不进入成果就绪／取码路径
+      note over App,UAV : 不推定机载取消／删除指令；放弃不删除机载原始点云。后续交接待确认。
+     else 重处理条件不满足
+      App --> User : 提示拒绝原因；不发送重处理请求
+     end
+    end
+   else 本次处理成功
+    UAV ->> App : 同一任务成果〔点云、堆体／盘点明细、已有文件关联〕
+    App -> S01 : 接入并保存成果、明细关联与处理状态（F17）
+    S01 --> App : 逻辑留存结果〔成功／失败〕
+    alt 成果接入与留存成功
+     App --> User : 对应成果已就绪，可由用户查看／取码
+    else 接入或留存失败
+     App --> User : 展示接入异常；不宣称成果已可用\n恢复细则待确认
+    end
+   end
+  end
+ end
+ alt 对应任务成果已就绪且可使用
+  opt 用户打开App成果（D05；UC-13）
+   User -> App : 查看结果〔所选任务〕
+   App -> S01 : 读取同一任务成果、堆体／明细与过程资料
+   S01 --> App : 对应点云、明细、照片／视频等资料或引用
+   App --> User : 展示三维、明细双向定位及过程资料
+  end
+  opt 用户主动取码并向Web发起单任务同步
+   ref over User,App,S01,E04,Web,S02
+   SQ-03 沿用第三轮同步校验详图（D06／D07）
+   入口：对应成果就绪；用户取码、复制并人工录入
+   出口：正常留存成功，或格式／有效期／附件校验异常反馈
+   Web内部校验折叠于Web；横框经过机载不表示机载参与此详图
+   end ref
+   alt 本次同步成功且完成正常留存
+    note over Web,S02 : 该任务接入资料进入可查询范围；按实际授权查看。
+   else 本次同步被拒绝或校验未通过
+    note over User,S02 : 按SQ-03反馈异常；不无条件进入成功留存。异常留存／可见性待确认。
+   end
+  end
+ else 仍在处理／处理失败／放弃／成果尚不可用
+  App --> User : 保持实际状态；本次不进入成果取码路径
+ end
+else 未启动／任务终态仍待确认／无可处理资料
+ App --> User : 展示实际状态；不推导成果已就绪
+end
+
+opt 用户另行发起Web查询（不以本次同步必然成功为前提）
+ group 检索、查看与下载（D08；UC-18／19／20）
+  User -> Web : 检索〔任务号／码／航线／场景／操作员；状态筛选〕
+  Web -> S02 : 按授权范围读取匹配任务摘要
+  S02 --> Web : 匹配任务列表或空结果（F22）
+  Web --> User : 返回任务列表或空结果说明
+  opt 用户选择有权访问的任务查看详情
+   User -> Web : 详情请求〔所选任务〕
+   Web -> S02 : 读取概览、三维／过程、报告与附件资料
+   S02 --> Web : 同一任务资料与附件引用
+   Web --> User : 展示详情、报告在线预览／打印所需资料
+  end
+  opt 有可选任务，且用户从列表或详情发起下载
+   User -> Web : 下载〔任务／附件范围；单个、所选或打包〕（F23）
+   Web -> S02 : 读取授权范围内的任务与附件（F25）
+   S02 --> Web : 可用文件内容／文件引用与可用性说明（F26）
+   Web -> Web : 需要时按引用读取实际文件并准备打包\n物理来源与访问路径仍待确认（SCI-Q20）
+   alt 文件／包实际取得成功
+    Web --> User : 返回实际文件／包及成功结果（F24）
+   else 权限不足／文件不可得／读取或打包失败
+    Web --> User : 返回拒绝／失败原因，不以开始下载代替成功（F24）
+   end
+  end
+ end
+end
+
+note over App,S02
+用例v1.8／DFD business v1.1：D01～D08及原F编号兼容。
+各端分别记录关键操作／异常；S07为分域逻辑日志，滚动独立于成果失效。
+App成果7天失效≠同步码7天到期；清理对象／权限待确认，不据此删除Web或机载数据。
+登录体系、日志实现、渲染内部调用及算法内部过程在相应模型承接，不在此详画。
+end note
+legend bottom
+ 实线箭头：业务请求／内部处理；开放箭头：可观察通知；虚线：逻辑返回。
+ ref为详图引用；alt／else只走命中分支，opt可选，loop按条件重复。
+ 箭头不规定网络协议；记录交接不自动证明落盘成功。
+endlegend
+@enduml

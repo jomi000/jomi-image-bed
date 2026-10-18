@@ -1,0 +1,178 @@
+@startuml
+title SQ-02 App—机载巡检交互详图｜D01～D03
+hide footbox
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 16
+skinparam sequenceMessageAlign center
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam maxMessageSize 260
+skinparam sequence {
+ ArrowColor #475569
+ LifeLineBorderColor #94A3B8
+ ParticipantBackgroundColor #E0F2FE
+ ParticipantBorderColor #0284C7
+ ActorBorderColor #475569
+ GroupBorderColor #64748B
+ GroupBackgroundColor #F8FAFC
+ GroupHeaderFontColor #0F172A
+}
+skinparam NoteBackgroundColor #FFF7ED
+skinparam NoteBorderColor #D97706
+
+actor "使用者\n（具体操作按角色授权）" as User
+participant "Android App" as App
+participant "机载系统\n（外部交互对象）" as UAV
+collections "S01 App本地巡检资料\n（逻辑资料）" as S01
+
+note over User,S01
+入口与SQ-01一致：用户进行巡检准备；已有对应权限与局域网条件。
+par只表达连接与选择两组准备没有固定先后，不要求同时执行。
+本图为业务请求与可观察反馈；实际报文、独立受理响应、超时见SCI-Q03／Q07。
+S03航线／S06地图在App内部折叠，不把它们并入任务资料S01。
+end note
+
+par 设备发现与连接（D01）
+ User -> App : 发现设备〔当前局域网〕
+ App ->> UAV : 发现请求〔局域网内可发现设备〕
+ UAV ->> App : 发现结果〔设备列表／无设备／失败信息〕
+ App --> User : 列表或原因、自查项
+ opt 存在可选设备且用户选择目标
+  User -> App : 连接〔目标设备〕
+  alt 当前巡检执行中且请求切换设备
+   App --> User : 拒绝切换；保持已有连接对象
+  else 当前状态允许连接
+   App ->> UAV : 连接请求〔目标设备〕
+   UAV ->> App : 连接状态反馈〔成功／失败、原因〕
+   alt 连接成功
+    App -> App : 更新唯一连接对象；同时只连接一台
+    App --> User : 展示连接成功
+   else 连接失败／被占用等拒绝
+    App --> User : 失败原因与自查项；不标记已连接
+   end
+  end
+ end
+else 场景与本地已有航线准备（D03）
+ User -> App : 选择巡检场景，再选该场景的已有航线
+ App -> App : 提供可选场景地图、航线与详情，保留准备态选择
+ note right of App : 未选完整时保留准备态；不将连接成功当作可起飞。
+end
+
+opt 已连接且具备权限，用户要求同步机载已有航线（D03）
+ User -> App : 同步航线〔目标设备〕
+ App ->> UAV : 请求机载已示教航线〔设备〕
+ UAV ->> App : 航线内容／新航线标识，或同步失败原因
+ App --> User : 展示同步结果；新航线由用户确认保存
+ opt 同步成功且用户确认保存
+  User -> App : 保存并选用航线〔场景、航线〕
+  App -> App : 留存航线与场景关联并更新选择（逻辑S03）
+ end
+end
+
+group 自检、人工确认与启动（D03）
+ User -> App : 发起巡检〔当前设备、场景、航线、任务关联〕
+ alt 设备未连接／场景或航线未选完整／无操作权限
+  App --> User : 阻止启动并提示补齐；不发送起飞请求
+ else 前置条件具备
+  loop 首次自检；失败后仅在用户选择重检时再执行，直到通过或不再继续
+   App ->> UAV : 自检请求〔目标设备、当前任务／航线关联〕
+   UAV ->> App : 整包自检结果〔检查项、通过／失败、原因〕
+   App --> User : 自检结果；未通过阻止起飞并提供重检入口
+   opt 本次未通过且用户选择重新自检
+    User -> App : 重新自检〔当前设备、任务关联〕
+   end
+  end
+  alt 自检通过且用户继续
+   App --> User : 提示人工核对场景与航线匹配
+   User -> App : 人工匹配确认／提出取消起飞
+   opt 用户提出取消起飞
+    App --> User : 二次确认取消
+    User -> App : 确认取消／返回人工核对
+    alt 已二次确认取消
+     App --> User : 本次未启动，不发送起飞请求
+    else 用户返回人工核对
+     App --> User : 保持待确认；须重新完成人工确认才可继续
+    end
+   end
+   opt 人工匹配已确认，且未确认取消
+    App --> User : 起飞倒计时〔时长待确认〕
+    opt 倒计时期间用户提出取消
+     User -> App : 取消起飞请求
+     App --> User : 二次确认取消起飞
+     User -> App : 确认取消／返回倒计时
+     note right of App : 返回后的恢复／重新计时规则待确认；不得绕过人工确认。
+    end
+    alt 倒计时结束、未确认取消且前置条件仍满足
+     App ->> UAV : 启动请求〔当前任务、目标设备、所选航线〕
+     App -> App : 标记请求待确认；不立即标记巡检执行
+     opt 收到机载实际状态或明确拒绝／失败
+      UAV ->> App : 启动相关反馈〔任务、执行状态／拒绝或失败原因〕
+      alt 已反馈实际进入执行
+       App -> S01 : 交接任务—设备—场景—航线关联及实际执行状态（F16）
+       App --> User : 展示实际巡检执行
+      else 已反馈拒绝／启动失败
+       App --> User : 展示拒绝／失败原因；不进入执行
+      end
+     end
+     note over App,UAV : 未取得反馈时保持请求待确认；不虚构单独的受理ACK或超时时长。
+    else 已确认取消／前置条件变化／倒计时恢复仍待确认
+     App --> User : 保持准备／取消／待确认状态；不发送启动请求
+    end
+   end
+  else 未通过／用户不再继续
+   App --> User : 保持未起飞；不进入执行
+  end
+ end
+end
+
+opt 已通过机载实际反馈确认进入执行（D02／D03）
+ loop 执行或返航期间逐次处理事件，确认完成／中断后退出
+  opt 用户在可返航状态长按确认返航
+   User -> App : 返航意向〔当前任务、目标设备〕
+   App ->> UAV : 返航请求〔当前任务、目标设备〕
+   note over App,UAV : 发送请求不等于已返航；实际状态／失败由下方反馈承接，独立受理响应待确认。
+  end
+  opt App本端检测到链路超时／中断
+   App -> App : 检测链路异常；判定阈值待核对
+   App --> User : 提示失联、重连状态及机载自主策略说明
+   note right of App : 断连不等于任务结束；未收到可靠状态不伪造返航或完成。
+  end
+  opt 链路可用并收到机载可观察反馈
+   UAV ->> App : 本次状态／事件〔任务、状态、遥测、进度、原因〕
+   App --> User : 更新轨迹／姿态／速度／电量／航点与飞行事件
+   alt 本条反馈为停障或停障处置状态
+    App --> User : 展示障碍、悬停与倒计时；按实际反馈显示恢复／续飞或超时返航
+   else 本条反馈为低电或低电返航状态
+    App --> User : ≤20%低电告警；≤12%机载自动返航；按实际状态展示返航
+   else 本条反馈为定位丢失及其处置
+    App --> User : 展示原地降落／中断；不提示定位丢失返航
+   else 本条反馈已确认遥控器介入并中断
+    App --> User : 展示任务中断及已有数据保留；不等同成果处理成功
+   else 本条反馈为实际返航或返航拒绝／失败
+    App --> User : 显示实际返航状态或拒绝／失败原因
+   end
+   opt 尚在执行／返航且本次另有实时媒体输入
+    UAV ->> App : 机载画面／在线点云及任务关联（F62）
+    App --> User : 同屏主副视图、切换与图层呈现（F63）
+   end
+   opt 本条反馈已确认任务完成／中断（包括上述异常导致的终态）
+    App -> S01 : 交接已确认终态、原因与已有采集资料关联（F16）
+    App --> User : 显示完成／中断；退出本轮执行监控，成果仍需处理
+   end
+  end
+ end
+end
+
+note over User,S01
+出口与SQ-01一致：已确认完成／中断及已有采集资料；否则保持未启动或待确认。
+上列alt按“本条反馈类型”分类，不规定不同安全事件互斥或处理优先级。
+停障解除后按机载反馈恢复；超时自动返航由机载执行；用户可长按请求立即返航。
+原始点云默认保留机载；App按端记录操作／异常，日志滚动独立于成果7天失效。
+本图记录箭头表达资料交接，不承诺落盘成功或独立存储协议。
+处理进度、成果接入由SQ-01衔接，不在本图假定任务结束即成果就绪。
+end note
+legend bottom
+ 调用：实线箭头；可观察机载消息：开放箭头；逻辑返回：虚线。
+ par仅表示两组准备无固定先后；alt按本次结果／事件分类，opt可选，loop按条件重复。
+endlegend
+@enduml
